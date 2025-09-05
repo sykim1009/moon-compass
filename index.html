@@ -19,7 +19,7 @@
       line-height: 1.6;
       white-space: pre-line;
     }
-    #compass, #altitudeDiagram, #azimuthDiagram {
+    #compass {
       margin-top: 20px;
       display: block;
       margin-left: auto;
@@ -33,7 +33,7 @@
       margin-right: auto;
     }
     @media (max-width: 600px) {
-      #compass, #altitudeDiagram, #azimuthDiagram, #map {
+      #compass, #map {
         width: 90%;
         height: 250px;
       }
@@ -46,8 +46,6 @@
   <div id="direction">Waiting for data...</div>
   <canvas id="compass" width="300" height="300"></canvas>
   <div id="map"></div>
-  <canvas id="azimuthDiagram" width="400" height="300"></canvas>
-  <canvas id="altitudeDiagram" width="300" height="150"></canvas>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
@@ -120,22 +118,47 @@
     }
 
     function getMoonPhase(date) {
-      const lp = 2551442.88; // 평균 삭망월 (초)
-      const newMoon = new Date(Date.UTC(2020, 0, 24, 21, 42)); // 더 정확한 기준 신월
-      const phase = ((date.getTime() - newMoon.getTime()) / 1000) % lp;
-      const phaseFraction = phase / lp;
+      const rad = Math.PI / 180;
+      const day = toJulian(date) - 2451545.0;
+      
+      // 태양의 황경 (간단한 근사)
+      const sunLongitude = (280.459 + 0.98564736 * day) * rad;
+      
+      // 달의 황경 (더 정확한 계산)
+      const L = (218.316 + 13.176396 * day) * rad;
+      const M = (134.963 + 13.064993 * day) * rad;
+      const F = (93.272 + 13.229350 * day) * rad;
+      const D = (297.850 + 12.190749 * day) * rad;
+      const MS = (357.529 + 0.985600 * day) * rad;
+      
+      const moonLongitude = L + 
+        6.289 * Math.sin(M) * rad +
+        1.274 * Math.sin(2*D - M) * rad +
+        0.658 * Math.sin(2*D) * rad -
+        0.186 * Math.sin(MS) * rad;
+      
+      // 달과 태양의 각도 차이
+      let phase = (moonLongitude - sunLongitude) / rad;
+      
+      // 0-360도 범위로 정규화
+      phase = ((phase % 360) + 360) % 360;
+      
+      // 0-1 범위로 변환 (0 = 신월, 0.5 = 보름달, 1 = 다시 신월)
+      const phaseFraction = phase / 360;
+      
+      console.log(`Moon Phase: ${phaseFraction.toFixed(4)} (${phase.toFixed(1)}°)`);
       return phaseFraction;
     }
 
     function getMoonPhaseEmoji(phase) {
       if (phase < 0.05 || phase >= 0.95) return "🌑"; // 신월
-      if (phase < 0.25) return "🌒"; // 상현달
-      if (phase < 0.45) return "🌓"; // 상현달 (1/4)
-      if (phase < 0.55) return "🌔"; // 상현달 (3/4)
-      if (phase < 0.75) return "🌕"; // 보름달
-      if (phase < 0.85) return "🌖"; // 하현달 (3/4)
-      if (phase < 0.95) return "🌗"; // 하현달 (1/4)
-      return "🌘"; // 하현달
+      if (phase < 0.15) return "🌒"; // 초승달
+      if (phase < 0.35) return "🌓"; // 상현달
+      if (phase < 0.45) return "🌔"; // 보름 전
+      if (phase < 0.55) return "🌕"; // 보름달
+      if (phase < 0.65) return "🌖"; // 보름 후
+      if (phase < 0.85) return "🌗"; // 하현달
+      return "🌘"; // 그믐달
     }
 
     function moonRiseSet(date, lat, lon) {
@@ -253,10 +276,6 @@
 
             document.getElementById("direction").textContent = text;
             moonData = moon;
-
-            // 다이어그램 업데이트
-            updateAzimuthDiagram(moon.azimuth, moon.altitude);
-            updateAltitudeDiagram(moon.azimuth, moon.altitude);
           }
 
           update();
@@ -382,156 +401,6 @@
       ctx.fillStyle = "yellow";
       ctx.fillText("🌙", 0, -radius + 30);
       ctx.restore();
-    }
-
-    function updateAzimuthDiagram(azimuth, altitude) {
-      const canvas = document.getElementById("azimuthDiagram");
-      const ctx = canvas.getContext("2d");
-      const width = canvas.width;
-      const height = canvas.height;
-      const centerX = width / 2;
-      const centerY = height * 0.8; // 아래쪽으로 이동
-      const radius = Math.min(width, height) * 0.35;
-
-      // 캔버스 초기화
-      ctx.clearRect(0, 0, width, height);
-
-      // 배경 원 (지평선)
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-      ctx.strokeStyle = "#666";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // 방향 표시 (N, E, S, W)
-      ctx.fillStyle = "#fff";
-      ctx.font = "16px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      
-      // N (0°)
-      ctx.fillText("N", centerX, centerY - radius - 20);
-      ctx.fillText("0°", centerX, centerY - radius - 35);
-      
-      // E (90°)
-      ctx.fillText("E", centerX + radius + 20, centerY);
-      ctx.fillText("90°", centerX + radius + 35, centerY);
-      
-      // S (180°)
-      ctx.fillText("S", centerX, centerY + radius + 20);
-      ctx.fillText("180°", centerX, centerY + radius + 35);
-      
-      // W (270°)
-      ctx.fillText("W", centerX - radius - 20, centerY);
-      ctx.fillText("270°", centerX - radius - 35, centerY);
-
-      // 고도 동심원들 (30°, 60°, 90°)
-      ctx.strokeStyle = "#444";
-      ctx.lineWidth = 1;
-      ctx.setLineDash([5, 5]);
-      
-      for (let alt = 30; alt <= 90; alt += 30) {
-        const r = radius * Math.cos(alt * Math.PI / 180);
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, r, 0, 2 * Math.PI);
-        ctx.stroke();
-        
-        // 고도 레이블
-        ctx.fillStyle = "#aaa";
-        ctx.font = "12px sans-serif";
-        ctx.fillText(`${alt}°`, centerX + r + 5, centerY - 5);
-      }
-      
-      ctx.setLineDash([]);
-
-      // 달의 위치 계산
-      const azRad = (azimuth - 90) * Math.PI / 180; // -90도로 보정 (북쪽이 위)
-      const altRad = altitude * Math.PI / 180;
-      
-      // 3D에서 2D로 투영 (stereographic projection)
-      const projectionRadius = radius * Math.cos(altRad);
-      const moonX = centerX + projectionRadius * Math.cos(azRad);
-      const moonY = centerY + projectionRadius * Math.sin(azRad);
-      
-      // 달 표시
-      ctx.fillStyle = altitude >= 0 ? "yellow" : "#666";
-      ctx.beginPath();
-      ctx.arc(moonX, moonY, 12, 0, 2 * Math.PI);
-      ctx.fill();
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      
-      // 달 이모지
-      ctx.font = "16px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("🌙", moonX, moonY);
-      
-      // 중심에서 달까지 선
-      if (altitude >= 0) {
-        ctx.beginPath();
-        ctx.moveTo(centerX, centerY);
-        ctx.lineTo(moonX, moonY);
-        ctx.strokeStyle = "rgba(255, 255, 0, 0.5)";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-      
-      // 정보 표시
-      ctx.fillStyle = "#fff";
-      ctx.font = "14px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(`Azimuth: ${azimuth.toFixed(1)}°`, centerX, 20);
-      ctx.fillText(`Altitude: ${altitude.toFixed(1)}°`, centerX, 40);
-      ctx.fillText("3D Azimuth-Altitude View", centerX, height - 10);
-    }
-
-    function updateAltitudeDiagram(azimuth, altitude) {
-      const canvas = document.getElementById("altitudeDiagram");
-      const ctx = canvas.getContext("2d");
-      const width = canvas.width;
-      const height = canvas.height;
-      const centerX = width / 2;
-      const centerY = height - 20;
-
-      // 캔버스 초기화
-      ctx.clearRect(0, 0, width, height);
-
-      // 지평선 그리기
-      ctx.beginPath();
-      ctx.moveTo(0, centerY);
-      ctx.lineTo(width, centerY);
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // 고도 눈금
-      ctx.fillStyle = "#fff";
-      ctx.font = "12px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("90°", 10, 20);
-      ctx.fillText("0°", 10, centerY);
-      ctx.fillText("-90°", 10, height - 20);
-
-      // 달의 고도 표시
-      const maxAltitude = 90;
-      const y = centerY - (altitude / maxAltitude) * (centerY - 20);
-      
-      // 달 아이콘
-      ctx.beginPath();
-      ctx.arc(centerX, y, 10, 0, 2 * Math.PI);
-      ctx.fillStyle = altitude >= 0 ? "yellow" : "#666";
-      ctx.fill();
-      ctx.strokeStyle = "#fff";
-      ctx.stroke();
-
-      // 방위각과 고도 표시
-      ctx.fillStyle = "#fff";
-      ctx.font = "14px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(`Az: ${azimuth.toFixed(1)}° Alt: ${altitude.toFixed(1)}°`, centerX, height - 5);
     }
 
     let lastHeadingUpdate = 0;
