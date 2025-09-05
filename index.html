@@ -1,612 +1,96 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🌙 달 위치 추적기</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      text-align: center;
-      background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
-      color: white;
-      margin: 0;
-      padding: 20px;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-    }
-    
-    .container {
-      max-width: 400px;
-      margin: 0 auto;
-      background: rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(10px);
-      border-radius: 20px;
-      padding: 30px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      margin-bottom: 140px; /* 하단 버전 패널 공간 */
-    }
-    
-    h1 {
-      font-size: 2em;
-      margin-bottom: 20px;
-      text-shadow: 0 2px 10px rgba(255, 255, 255, 0.3);
-    }
-    
-    .test-mode-section {
-      margin-bottom: 25px;
-      padding: 15px;
-      background: rgba(0, 0, 0, 0.2);
-      border-radius: 15px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    button {
-      background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
-      border: none;
-      color: white;
-      padding: 15px 30px;
-      font-size: 18px;
-      border-radius: 50px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-      margin: 5px;
-    }
-    
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
-    }
-    
-    button:disabled {
-      background: #555;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
-    }
-    
-    #testModeBtn {
-      background: linear-gradient(45deg, #ff6b6b, #ee5a24);
-      padding: 10px 20px;
-      font-size: 14px;
-      margin: 0;
-    }
-    
-    #testModeBtn.production {
-      background: linear-gradient(45deg, #00d2d3, #54a0ff);
-    }
-    
-    #info {
-      margin: 20px 0;
-      font-size: 1.1em;
-      line-height: 1.8;
-      white-space: pre-line;
-      background: rgba(0, 0, 0, 0.2);
-      padding: 20px;
-      border-radius: 15px;
-      min-height: 100px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    .moon-indicator {
-      font-size: 4em;
-      margin: 20px 0;
-      transition: transform 0.3s ease;
-    }
-    
-    .pointing {
-      animation: pulse 1s infinite;
-      color: #ffd700;
-    }
-    
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.1); }
-    }
-    
-    .status {
-      font-size: 0.9em;
-      opacity: 0.8;
-      margin-top: 10px;
-    }
-    
-    .coords {
-      font-family: monospace;
-      background: rgba(0, 0, 0, 0.3);
-      padding: 5px 10px;
-      border-radius: 5px;
-      display: inline-block;
-      margin: 5px;
-    }
-    
-    /* 버전 선택 패널 */
-    .version-panel {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: rgba(0, 0, 0, 0.9);
-      backdrop-filter: blur(15px);
-      padding: 20px;
-      text-align: center;
-      border-top: 1px solid rgba(255, 255, 255, 0.1);
-      z-index: 1000;
-    }
-    
-    .version-btn {
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      color: white;
-      padding: 8px 15px;
-      border-radius: 25px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      font-size: 0.9em;
-      min-width: 50px;
-      margin: 0 5px;
-    }
-    
-    .version-btn:hover {
-      background: rgba(255, 255, 255, 0.2);
-      transform: translateY(-2px);
-    }
-    
-    .version-btn.active {
-      background: linear-gradient(45deg, #667eea, #764ba2);
-      border-color: #667eea;
-      box-shadow: 0 2px 10px rgba(102, 126, 234, 0.4);
-    }
-    
-    .version-info {
-      font-size: 0.8em;
-      color: #ccc;
-      margin-top: 10px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>달 추적 앱</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        #gps, #gyro, #moon { margin: 20px; }
+        button { padding: 10px 20px; font-size: 16px; }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h1>🌙 달 위치 추적기</h1>
-    
-    <!-- 테스트 모드 섹션 -->
-    <div class="test-mode-section">
-      <button id="testModeBtn" onclick="toggleTestMode()">
-        🧪 테스트 모드: ON
-      </button>
-      <div style="font-size: 0.8em; color: #ccc; margin-top: 8px;">
-        테스트 모드: 달 고도 체크 무시 (항상 작동)
-      </div>
-    </div>
-    
-    <button id="startBtn" onclick="init()">위치 추적 시작</button>
-    <div class="moon-indicator" id="moonIcon">🌙</div>
-    <div id="info">위치 정보를 가져오는 중...</div>
-    <div class="status" id="status">GPS와 나침반 권한이 필요합니다</div>
-  </div>
+    <h1>달 추적 앱</h1>
+    <div id="gps">GPS: 대기 중...</div>
+    <div id="gyro">자이로: 대기 중...</div>
+    <div id="moon">달 정보: 대기 중...</div>
+    <button onclick="startTracking()">추적 시작</button>
 
-  <!-- 버전 선택 패널 -->
-  <div class="version-panel">
-    <div style="margin-bottom: 15px; font-size: 1em; color: #fff;">
-      🚀 Moon Tracker Versions
-    </div>
-    <div style="display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
-      <button onclick="loadVersion(1)" class="version-btn" data-version="1">v1.0</button>
-      <button onclick="loadVersion(2)" class="version-btn" data-version="2">v2.0</button>
-      <button onclick="loadVersion(3)" class="version-btn" data-version="3">v3.0</button>
-      <button onclick="loadVersion(4)" class="version-btn" data-version="4">v4.0</button>
-      <button onclick="loadVersion(5)" class="version-btn" data-version="5">v5.0</button>
-      <button onclick="loadVersion(6)" class="version-btn active" data-version="6">v6.0</button>
-    </div>
-    <div class="version-info" id="versionInfo">
-      현재: v6.0 - 0.1초 고속 실시간 추적 + 테스트 모드
-    </div>
-  </div>
-
-  <script>
-    let isTracking = false;
-    let watchId = null;
-    let updateInterval = null;
-    let currentMoonAzimuth = 0;
-    let currentHeading = 0;
-    let currentLat = 0;
-    let currentLon = 0;
-    let currentAccuracy = 0;
-    let testMode = true; // 기본값: 테스트 모드 활성화
-    
-    function toJulian(date) {
-      return date / 86400000 + 2440587.5;
-    }
-    
-    function moonPosition(date, lat, lon) {
-      const rad = Math.PI / 180;
-      const day = toJulian(date) - 2451545.0;
-      
-      // 달의 평균 근사 궤도 요소
-      const L = (218.316 + 13.176396 * day) * rad; // 평균 황경
-      const M = (134.963 + 13.064993 * day) * rad; // 평균 근점이각
-      const F = (93.272 + 13.229350 * day) * rad;  // 평균 편각
-      const D = (297.850 + 12.190749 * day) * rad; // 평균 이각
-      
-      // 더 정확한 황경/황위 계산
-      let lonEcl = L + 6.289 * Math.sin(M) * rad;
-      lonEcl += 1.274 * Math.sin(2*D - M) * rad;
-      lonEcl += 0.658 * Math.sin(2*D) * rad;
-      lonEcl -= 0.186 * Math.sin(M) * rad;
-      
-      const latEcl = 5.128 * Math.sin(F) * rad;
-      
-      // 황도 경사각
-      const e = (23.439 - 0.0000004 * day) * rad;
-      
-      // 적경/적위 변환
-      const ra = Math.atan2(
-        Math.sin(lonEcl) * Math.cos(e) - Math.tan(latEcl) * Math.sin(e),
-        Math.cos(lonEcl)
-      );
-      const dec = Math.asin(
-        Math.sin(latEcl) * Math.cos(e) + Math.cos(latEcl) * Math.sin(e) * Math.sin(lonEcl)
-      );
-      
-      // 그리니치 항성시 계산
-      const GMST = (18.697374558 + 24.06570982441908 * day) % 24;
-      const LST = (GMST * 15 + lon) * rad;
-      const H = LST - ra;
-      
-      // 지평 좌표계 변환
-      const phi = lat * rad;
-      const alt = Math.asin(
-        Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H)
-      );
-      const az = Math.atan2(
-        -Math.sin(H),
-        Math.tan(dec) * Math.cos(phi) - Math.sin(phi) * Math.cos(H)
-      );
-      
-      // 달의 위상 계산
-      const phase = 0.5 * (1 - Math.cos(L - (282.9 + 0.3 * day) * rad));
-      
-      return {
-        azimuth: (az / rad + 360) % 360,
-        altitude: alt / rad,
-        phase: phase
-      };
-    }
-    
-    function getMoonPhaseEmoji(phase) {
-      if (phase < 0.1) return "🌑"; // 신월
-      if (phase < 0.3) return "🌒"; // 초승달
-      if (phase < 0.45) return "🌓"; // 상현달
-      if (phase < 0.55) return "🌔"; // 보름달에 가까운
-      if (phase < 0.7) return "🌕"; // 보름달
-      if (phase < 0.8) return "🌖"; // 하현달에 가까운
-      if (phase < 0.9) return "🌗"; // 하현달
-      return "🌘"; // 그믐달
-    }
-    
-    function toggleTestMode() {
-      testMode = !testMode;
-      const btn = document.getElementById('testModeBtn');
-      
-      if (testMode) {
-        btn.textContent = '🧪 테스트 모드: ON';
-        btn.className = '';
-        document.querySelector('.test-mode-section div').textContent = '테스트 모드: 달 고도 체크 무시 (항상 작동)';
-      } else {
-        btn.textContent = '🚀 운영 모드: ON';
-        btn.className = 'production';
-        document.querySelector('.test-mode-section div').textContent = '운영 모드: 달이 지평선 아래면 추적 중단';
-      }
-      
-      console.log(`모드 변경: ${testMode ? '테스트' : '운영'} 모드 활성화`);
-      
-      // 추적 중이면 재시작
-      if (isTracking) {
-        stopTracking();
-        setTimeout(() => init(), 500);
-      }
-    }
-    
-    function init() {
-      const startBtn = document.getElementById('startBtn');
-      const status = document.getElementById('status');
-      
-      // 브라우저 감지
-      const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
-      const isFirefox = /Firefox/.test(navigator.userAgent);
-      
-      startBtn.disabled = true;
-      startBtn.textContent = '위치 확인 중...';
-      
-      if (isChrome) {
-        status.textContent = 'Chrome에서 GPS 위치를 확인하는 중... (권한 팝업 확인)';
-      } else if (isFirefox) {
-        status.textContent = 'Firefox에서 GPS 위치를 확인하는 중...';
-      } else {
-        status.textContent = 'GPS 위치를 가져오는 중입니다...';
-      }
-      
-      if (navigator.geolocation) {
-        // 권한 상태 확인
-        if (navigator.permissions) {
-          navigator.permissions.query({name: 'geolocation'}).then(result => {
-            console.log('위치 권한 상태:', result.state);
-          });
-        }
-        
-        // 실시간 위치 추적 시작
-        watchId = navigator.geolocation.watchPosition(
-          position => {
-            currentLat = position.coords.latitude;
-            currentLon = position.coords.longitude;
-            currentAccuracy = position.coords.accuracy || 0;
-            
-            // 달 위치 계산
-            const now = new Date();
-            const moon = moonPosition(now, currentLat, currentLon);
-            currentMoonAzimuth = moon.azimuth;
-            
-            // 달 위상에 따른 이모지 업데이트
-            const moonIcon = document.getElementById('moonIcon');
-            moonIcon.textContent = getMoonPhaseEmoji(moon.phase);
-            
-            // 테스트 모드에 따른 달 고도 체크
-            if (!testMode && moon.altitude < 0) {
-              status.textContent = '달이 지평선 아래에 있습니다 (운영 모드)';
-              startBtn.textContent = '추적 중지';
-              startBtn.onclick = stopTracking;
-              startBtn.disabled = false;
-              console.log(`운영 모드: 달 고도 ${moon.altitude.toFixed(1)}° - 추적 중단`);
-              document.getElementById('info').innerHTML = `
-                <div style="color: #ff6b6b; text-align: center;">
-                  ❌ 달이 지평선 아래에 있습니다<br>
-                  <small>고도: ${moon.altitude.toFixed(1)}°</small><br><br>
-                  <small>🧪 테스트 모드로 전환하거나<br>달이 떠오를 때까지 기다려주세요</small>
-                </div>
-              `;
-              return;
-            } else {
-              if (testMode) {
-                console.log(`테스트 모드: 달 고도 ${moon.altitude.toFixed(1)}° 무시하고 계속 진행`);
-              } else {
-                console.log(`운영 모드: 달 고도 ${moon.altitude.toFixed(1)}° - 추적 가능`);
-              }
-              
-              if (!isTracking) {
-                status.textContent = `나침반을 활성화하는 중... (${testMode ? '테스트' : '운영'} 모드)`;
-                setupCompass();
-              }
-            }
-          },
-          error => {
-            let errorMessage = '';
-            let detailInfo = '';
-            switch(error.code) {
-              case error.PERMISSION_DENIED:
-                errorMessage = '🚫 브라우저 위치 권한이 거부됨';
-                if (isChrome) {
-                  detailInfo = `
-                    <strong>Chrome 권한 문제:</strong><br>
-                    🔧 <strong>해결방법 (순서대로 시도):</strong><br>
-                    1️⃣ 주소창 왼쪽 🔒 아이콘 → 위치 → 허용<br>
-                    2️⃣ Chrome 메뉴(⋮) → 설정 → 개인정보 및 보안 → 사이트 설정 → 위치<br>
-                    3️⃣ 페이지 새로고침 후 다시 시도<br>
-                    4️⃣ Chrome 재시작 후 재시도<br><br>
-                    💡 Chrome은 HTTPS에서만 위치 서비스가 작동합니다
-                  `;
-                } else {
-                  detailInfo = `
-                    <strong>권한 문제:</strong> 브라우저가 위치 접근을 차단했습니다<br>
-                    📱 <strong>해결방법:</strong><br>
-                    • 주소창의 위치 아이콘 클릭 → 허용<br>
-                    • 브라우저 설정에서 위치 서비스 허용<br>
-                    • 페이지 새로고침 후 다시 시도
-                  `;
+    <script>
+        // GPS 업데이트
+        function updateGPS() {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const { latitude, longitude } = position.coords;
+                    document.getElementById('gps').innerText = 
+                        `GPS: 위도 ${latitude.toFixed(4)}, 경도 ${longitude.toFixed(4)}`;
+                },
+                (error) => {
+                    document.getElementById('gps').innerText = `GPS 오류: ${error.message}`;
                 }
-                break;
-              case error.POSITION_UNAVAILABLE:
-                errorMessage = '📡 GPS 신호를 받을 수 없음';
-                detailInfo = `
-                  <strong>신호 문제:</strong> GPS 하드웨어나 신호 문제<br>
-                  🔧 <strong>해결방법:</strong><br>
-                  • 실외로 이동 (실내/지하는 GPS 신호 약함)<br>
-                  • 기기의 위치 서비스 활성화 확인<br>
-                  • Wi-Fi와 모바일 데이터 모두 켜기 (보조 위치 정보)
-                `;
-                break;
-              case error.TIMEOUT:
-                errorMessage = '⏱️ GPS 연결 시간 초과';
-                detailInfo = `
-                  <strong>시간 초과:</strong> 3초 내에 위치를 찾지 못함<br>
-                  🔧 <strong>해결방법:</strong><br>
-                  • 하늘이 잘 보이는 곳으로 이동<br>
-                  • 잠시 기다린 후 다시 시도<br>
-                  • 기기 재시작 후 재시도
-                `;
-                break;
-              default:
-                errorMessage = '❌ 알 수 없는 오류';
-                detailInfo = `오류 코드: ${error.code}<br>메시지: ${error.message}`;
-                break;
-            }
-            
-            console.log('Geolocation Error:', error.code, error.message);
-            status.textContent = errorMessage;
-            
-            // 상세한 해결 방법 제공
-            document.getElementById('info').innerHTML = `
-              <div style="text-align: left; font-size: 0.9em;">
-                ${detailInfo}<br><br>
-                
-                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin-top: 15px;">
-                  <strong>📍 수동 위치 입력:</strong><br>
-                  <div style="margin: 10px 0;">
-                    위도: <input type="number" id="manualLat" placeholder="37.5665" step="0.0001" style="width: 80px; margin: 0 5px; background: rgba(0,0,0,0.3); border: 1px solid #666; color: white; padding: 5px; border-radius: 3px;"><br>
-                    경도: <input type="number" id="manualLon" placeholder="126.9780" step="0.0001" style="width: 80px; margin: 0 5px; background: rgba(0,0,0,0.3); border: 1px solid #666; color: white; padding: 5px; border-radius: 3px;">
-                    <button onclick="useManualLocation()" style="padding: 5px 10px; margin-left: 5px; font-size: 12px; margin-top: 5px;">확인</button>
-                  </div>
-                  <small style="opacity: 0.7;">💡 현재 위치를 모르겠다면 "내 위치 좌표" 구글 검색</small>
-                </div>
-                
-                <div style="margin-top: 15px; padding: 10px; background: rgba(255,200,0,0.1); border-radius: 5px;">
-                  <strong>🔍 Chrome 추가 체크사항:</strong><br>
-                  <small>
-                    • 시크릿 모드에서 시도해보기<br>
-                    • chrome://settings/content/location 직접 접속<br>
-                    • 확장 프로그램이 방해하는지 확인<br>
-                    • 개발자도구(F12) Console에서 상세 오류 확인
-                  </small>
-                </div>
-              </div>
-            `;
-            startBtn.textContent = '다시 시도';
-            startBtn.disabled = false;
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 3000,
-            maximumAge: 500
-          }
-        );
-      } else {
-        status.textContent = '이 브라우저는 위치 서비스를 지원하지 않습니다';
-        startBtn.textContent = '다시 시도';
-        startBtn.disabled = false;
-      }
-    }
-    
-    function updateLocationDisplay() {
-      const info = document.getElementById('info');
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString() + '.' + String(now.getMilliseconds()).padStart(3, '0');
-      const moon = moonPosition(now, currentLat, currentLon);
-      
-      const diff = ((currentMoonAzimuth - currentHeading + 540) % 360) - 180;
-      
-      info.innerHTML = `
-        <div style="font-family: monospace; font-size: 0.9em;">
-          <div style="background: rgba(0,255,0,0.1); padding: 8px; border-radius: 5px; margin-bottom: 10px;">
-            📍 실시간 추적 [${timeStr}]
-          </div>
-          
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; text-align: left;">
-            <div>
-              <div><strong>🌍 GPS 좌표</strong></div>
-              <div>위도: ${currentLat.toFixed(8)}°</div>
-              <div>경도: ${currentLon.toFixed(8)}°</div>
-              <div style="font-size: 0.8em; opacity: 0.7;">정확도: ±${currentAccuracy.toFixed(1)}m</div>
-            </div>
-            
-            <div>
-              <div><strong>🧭 나침반</strong></div>
-              <div>내 방향: ${currentHeading.toFixed(1)}°</div>
-              <div>달 방향: ${moon.azimuth.toFixed(1)}°</div>
-              <div>차이: ${Math.abs(diff).toFixed(1)}°</div>
-            </div>
-            
-            <div>
-              <div><strong>🌙 달 정보</strong></div>
-              <div>고도: ${moon.altitude.toFixed(1)}°</div>
-              <div>위상: ${(moon.phase * 100).toFixed(0)}%</div>
-              <div style="font-size: 0.8em; color: ${testMode ? '#ffaa00' : '#00ff00'};">
-                ${testMode ? '🧪 테스트' : '🚀 운영'} 모드
-              </div>
-            </div>
-            
-            <div>
-              <div><strong>📊 상태</strong></div>
-              <div style="color: ${Math.abs(diff) < 5 ? '#00ff00' : '#ffaa00'};">
-                ${Math.abs(diff) < 5 ? '🎯 정조준!' : (diff > 0 ? '➡️ 우회전' : '⬅️ 좌회전')}
-              </div>
-              <div style="font-size: 0.8em;">업데이트: 0.1초</div>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-    
-    function useManualLocation() {
-      const lat = parseFloat(document.getElementById('manualLat').value);
-      const lon = parseFloat(document.getElementById('manualLon').value);
-      
-      if (isNaN(lat) || isNaN(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
-        alert('올바른 위도(-90~90)와 경도(-180~180)를 입력해주세요');
-        return;
-      }
-      
-      currentLat = lat;
-      currentLon = lon;
-      currentAccuracy = 0;
-      
-      const now = new Date();
-      const moon = moonPosition(now, lat, lon);
-      currentMoonAzimuth = moon.azimuth;
-      
-      // 달 위상에 따른 이모지 업데이트
-      const moonIcon = document.getElementById('moonIcon');
-      moonIcon.textContent = getMoonPhaseEmoji(moon.phase);
-      
-      const status = document.getElementById('status');
-      
-      // 테스트 모드에 따른 달 고도 체크
-      if (!testMode && moon.altitude < 0) {
-        status.textContent = '달이 지평선 아래에 있습니다 (운영 모드)';
-        document.getElementById('startBtn').textContent = '다시 확인';
-        document.getElementById('startBtn').disabled = false;
-        console.log(`운영 모드: 달 고도 ${moon.altitude.toFixed(1)}° - 추적 불가`);
-      } else {
-        console.log(`${testMode ? '테스트' : '운영'} 모드: 달 고도 ${moon.altitude.toFixed(1)}°${testMode && moon.altitude < 0 ? ' (무시)' : ''}`);
-        status.textContent = `나침반을 활성화하는 중... (${testMode ? '테스트' : '운영'} 모드)`;
-        setupCompass();
-      }
-    }
-    
-    function setupCompass() {
-      const status = document.getElementById('status');
-      const startBtn = document.getElementById('startBtn');
-      
-      if (typeof DeviceOrientationEvent !== 'undefined') {
-        // iOS 13+ 권한 요청
-        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-          DeviceOrientationEvent.requestPermission()
-            .then(response => {
-              if (response === 'granted') {
-                startCompassTracking();
-              } else {
-                status.textContent = '나침반 권한이 거부되었습니다';
-                startBtn.textContent = '추적 중지';
-                startBtn.onclick = stopTracking;
-                startBtn.disabled = false;
-              }
-            })
-            .catch(err => {
-              console.error(err);
-              status.textContent = '나침반 권한 요청 실패';
-              startBtn.textContent = '추적 중지';
-              startBtn.onclick = stopTracking;
-              startBtn.disabled = false;
-            });
-        } else {
-          // 안드로이드 등
-          startCompassTracking();
+            );
         }
-      } else {
-        status.textContent = '이 기기는 나침반을 지원하지 않습니다 (위치만 추적)';
-        startBtn.textContent = '추적 중지';
-        startBtn.onclick = stopTracking;
-        startBtn.disabled = false;
-      }
-    }
-    
-    function startCompassTracking() {
-      const status = document.getElementById('status');
-      const startBtn = document.getElementById('startBtn');
-      const moonIcon = document.getElementById('moonIcon');
-      
-      isTracking = true;
-      status.textContent = `
+
+        // 자이로 업데이트
+        function updateGyro(event) {
+            const { alpha, beta, gamma } = event;
+            document.getElementById('gyro').innerText = 
+                `자이로: Alpha ${alpha.toFixed(1)}, Beta ${beta.toFixed(1)}, Gamma ${gamma.toFixed(1)}`;
+        }
+
+        // 자이로 권한 요청
+        function requestOrientationPermission() {
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientation', updateGyro);
+                        } else {
+                            alert('자이로 권한이 필요합니다.');
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                window.addEventListener('deviceorientation', updateGyro);
+            }
+        }
+
+        // 달 위치 추적
+        function startTracking() {
+            navigator.geolocation.getCurrentPosition((position) => {
+                const { latitude, longitude } = position.coords;
+                const now = new Date();
+                const moonPos = SunCalc.getMoonPosition(now, latitude, longitude);
+                const { azimuth, altitude } = moonPos;
+
+                const azimuthDeg = (azimuth * 180 / Math.PI).toFixed(2);
+                const altitudeDeg = (altitude * 180 / Math.PI).toFixed(2);
+
+                document.getElementById('moon').innerText = 
+                    `달 위치: 방위각 ${azimuthDeg}°, 고도 ${altitudeDeg}°`;
+
+                window.addEventListener('deviceorientation', (event) => {
+                    const { alpha } = event;
+                    const delta = (azimuthDeg - alpha).toFixed(2);
+                    let guidance = '';
+                    if (Math.abs(delta) < 10) {
+                        guidance = '정확한 방향입니다!';
+                    } else if (delta > 0) {
+                        guidance = `오른쪽으로 ${Math.abs(delta)}° 회전하세요.`;
+                    } else {
+                        guidance = `왼쪽으로 ${Math.abs(delta)}° 회전하세요.`;
+                    }
+                    document.getElementById('moon').innerText = 
+                        `달 위치: 방위각 ${azimuthDeg}°, 고도 ${altitudeDeg}°\n안내: ${guidance}`;
+                });
+            });
+        }
+
+        // 초기화
+        setInterval(updateGPS, 1000);
+        requestOrientationPermission();
+    </script>
+</body>
+</html>
