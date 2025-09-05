@@ -95,29 +95,52 @@
     }
 
     function moonRiseSet(date, lat, lon) {
-      const times = {};
       const rad = Math.PI / 180;
-      const h0 = -0.3 * rad; // 달 반지름 보정
-
-      function hourAngle(phi, dec, h) {
-        return Math.acos((Math.sin(h) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec)));
-      }
-
-      const lw = -lon * rad;
+      const h0 = -0.133 * rad; // 달의 뜨고 지는 시간 계산을 위한 고도 보정 (-0.133°는 달의 반지름 및 대기 굴절 보정)
       const phi = lat * rad;
+      const lw = -lon * rad;
+
+      // 현재 날짜의 율리우스 날짜
       const d = toJulian(date) - 2451545.0;
-      const n = Math.round(d - lw / (2 * Math.PI));
 
-      const J = 2451545.0 + n + 0.0009 + lw / (2 * Math.PI);
-      const date0 = fromJulian(J);
+      // 하루 동안의 달의 위치를 여러 번 확인하여 뜨고 지는 시간을 계산
+      const times = {};
+      let riseTime = null;
+      let setTime = null;
 
-      const mp = moonPosition(date0, lat, lon);
-      const H = hourAngle(phi, mp.dec, h0);
+      // 24시간 동안 1시간 간격으로 확인
+      for (let i = 0; i < 24; i++) {
+        const currentTime = fromJulian(toJulian(date) + i / 24);
+        const nextTime = fromJulian(toJulian(date) + (i + 1) / 24);
+        
+        const mp1 = moonPosition(currentTime, lat, lon);
+        const mp2 = moonPosition(nextTime, lat, lon);
 
-      if (!isNaN(H)) {
-        times.rise = fromJulian(J + (H + mp.ra + lw) / (2 * Math.PI));
-        times.set = fromJulian(J + (-H + mp.ra + lw) / (2 * Math.PI));
+        const GMST1 = (18.697374558 + 24.06570982441908 * (toJulian(currentTime) - 2451545.0)) % 24;
+        const LST1 = (GMST1 * 15 + lon) * rad;
+        const H1 = LST1 - mp1.ra;
+
+        const GMST2 = (18.697374558 + 24.06570982441908 * (toJulian(nextTime) - 2451545.0)) % 24;
+        const LST2 = (GMST2 * 15 + lon) * rad;
+        const H2 = LST2 - mp2.ra;
+
+        const alt1 = Math.asin(Math.sin(phi) * Math.sin(mp1.dec) + Math.cos(phi) * Math.cos(mp1.dec) * Math.cos(H1));
+        const alt2 = Math.asin(Math.sin(phi) * Math.sin(mp2.dec) + Math.cos(phi) * Math.cos(mp2.dec) * Math.cos(H2));
+
+        // 고도가 h0 (-0.133°)를 지나가는지 확인
+        if (alt1 <= h0 && alt2 > h0) {
+          // 뜨는 시간 보간
+          const fraction = (h0 - alt1) / (alt2 - alt1);
+          riseTime = new Date(currentTime.getTime() + fraction * 3600000);
+        } else if (alt1 >= h0 && alt2 < h0) {
+          // 지는 시간 보간
+          const fraction = (h0 - alt1) / (alt2 - alt1);
+          setTime = new Date(currentTime.getTime() + fraction * 3600000);
+        }
       }
+
+      if (riseTime) times.rise = riseTime;
+      if (setTime) times.set = setTime;
 
       return times;
     }
@@ -176,8 +199,10 @@
       if (!moonData) return;
       if (e.alpha != null) {
         const heading = 360 - e.alpha; // 북쪽 기준
-        let text = document.getElementById("direction").textContent + "\n";
-        text += `Your heading: ${heading.toFixed(0)}°`;
+
+        // 기존 텍스트 가져오기
+        let text = document.getElementById("direction").textContent.split('\n').slice(0, 5).join('\n');
+        text += `\nYour heading: ${heading.toFixed(0)}°`;
 
         const diff = ((moonData.azimuth - heading + 540) % 360) - 180;
         if (Math.abs(diff) < 15) {
