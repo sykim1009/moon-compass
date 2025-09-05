@@ -18,12 +18,19 @@
       line-height: 1.6;
       white-space: pre-line;
     }
+    #compass {
+      margin-top: 20px;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
   </style>
 </head>
 <body>
   <h1>🌙 Moon Locator</h1>
   <button onclick="init()">Start</button>
   <div id="direction">Waiting for data...</div>
+  <canvas id="compass" width="300" height="300"></canvas>
 
   <script>
     // ============= 달 계산용 함수들 =============
@@ -96,19 +103,16 @@
 
     function moonRiseSet(date, lat, lon) {
       const rad = Math.PI / 180;
-      const h0 = -0.133 * rad; // 달의 뜨고 지는 시간 계산을 위한 고도 보정 (-0.133°는 달의 반지름 및 대기 굴절 보정)
+      const h0 = -0.133 * rad; // 달의 뜨고 지는 시간 계산을 위한 고도 보정
       const phi = lat * rad;
       const lw = -lon * rad;
 
-      // 현재 날짜의 율리우스 날짜
       const d = toJulian(date) - 2451545.0;
 
-      // 하루 동안의 달의 위치를 여러 번 확인하여 뜨고 지는 시간을 계산
       const times = {};
       let riseTime = null;
       let setTime = null;
 
-      // 24시간 동안 1시간 간격으로 확인
       for (let i = 0; i < 24; i++) {
         const currentTime = fromJulian(toJulian(date) + i / 24);
         const nextTime = fromJulian(toJulian(date) + (i + 1) / 24);
@@ -127,13 +131,10 @@
         const alt1 = Math.asin(Math.sin(phi) * Math.sin(mp1.dec) + Math.cos(phi) * Math.cos(mp1.dec) * Math.cos(H1));
         const alt2 = Math.asin(Math.sin(phi) * Math.sin(mp2.dec) + Math.cos(phi) * Math.cos(mp2.dec) * Math.cos(H2));
 
-        // 고도가 h0 (-0.133°)를 지나가는지 확인
         if (alt1 <= h0 && alt2 > h0) {
-          // 뜨는 시간 보간
           const fraction = (h0 - alt1) / (alt2 - alt1);
           riseTime = new Date(currentTime.getTime() + fraction * 3600000);
         } else if (alt1 >= h0 && alt2 < h0) {
-          // 지는 시간 보간
           const fraction = (h0 - alt1) / (alt2 - alt1);
           setTime = new Date(currentTime.getTime() + fraction * 3600000);
         }
@@ -196,25 +197,71 @@
     }
 
     function updateHeading(e) {
-      if (!moonData) return;
-      if (e.alpha != null) {
-        const heading = 360 - e.alpha; // 북쪽 기준
+      if (!moonData || e.alpha == null) return;
 
-        // 기존 텍스트 가져오기
-        let text = document.getElementById("direction").textContent.split('\n').slice(0, 5).join('\n');
-        text += `\nYour heading: ${heading.toFixed(0)}°`;
+      const heading = 360 - e.alpha; // 북쪽 기준
+      const canvas = document.getElementById("compass");
+      const ctx = canvas.getContext("2d");
+      const radius = canvas.width / 2;
 
-        const diff = ((moonData.azimuth - heading + 540) % 360) - 180;
-        if (Math.abs(diff) < 15) {
-          text += `\n👉 Pointing at the moon!`;
-        } else if (diff > 0) {
-          text += `\n↗ Turn right ${Math.abs(diff).toFixed(0)}°`;
-        } else {
-          text += `\n↖ Turn left ${Math.abs(diff).toFixed(0)}°`;
-        }
+      // 캔버스 초기화
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        document.getElementById("direction").textContent = text;
+      // 나침반 원 그리기
+      ctx.beginPath();
+      ctx.arc(radius, radius, radius - 10, 0, 2 * Math.PI);
+      ctx.fillStyle = "#333";
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 방위 표시 (N, E, S, W)
+      ctx.fillStyle = "#fff";
+      ctx.font = "16px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("N", radius, 20);
+      ctx.fillText("E", canvas.width - 20, radius);
+      ctx.fillText("S", radius, canvas.height - 20);
+      ctx.fillText("W", 20, radius);
+
+      // 사용자의 방향(heading) 표시 (빨간 화살표)
+      ctx.save();
+      ctx.translate(radius, radius);
+      ctx.rotate(heading * Math.PI / 180);
+      ctx.fillStyle = "red";
+      ctx.beginPath();
+      ctx.moveTo(0, -radius + 20);
+      ctx.lineTo(-10, -radius + 40);
+      ctx.lineTo(10, -radius + 40);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // 달의 방향(azimuth) 표시 (노란 달 아이콘)
+      ctx.save();
+      ctx.translate(radius, radius);
+      ctx.rotate(moonData.azimuth * Math.PI / 180);
+      ctx.font = "24px sans-serif";
+      ctx.fillStyle = "yellow";
+      ctx.fillText("🌙", 0, -radius + 30);
+      ctx.restore();
+
+      // 텍스트 업데이트
+      let text = document.getElementById("direction").textContent.split('\n').slice(0, 5).join('\n');
+      text += `\nYour heading: ${heading.toFixed(0)}°`;
+
+      const diff = ((moonData.azimuth - heading + 540) % 360) - 180;
+      if (Math.abs(diff) < 15) {
+        text += `\n👉 Pointing at the moon!`;
+      } else if (diff > 0) {
+        text += `\n↗ Turn right ${Math.abs(diff).toFixed(0)}°`;
+      } else {
+        text += `\n↖ Turn left ${Math.abs(diff).toFixed(0)}°`;
       }
+
+      document.getElementById("direction").textContent = text;
     }
   </script>
 </body>
