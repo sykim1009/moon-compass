@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Moon Compass</title>
+  <title>Moon Locator</title>
   <style>
     body {
       font-family: sans-serif;
@@ -12,55 +12,21 @@
       margin: 0;
       padding: 1em;
     }
-    #moonPhase {
-      margin-top: 20px;
-      background: black;
-      border-radius: 50%;
-    }
     #direction {
       margin-top: 20px;
       font-size: 1.2em;
+      line-height: 1.6;
     }
   </style>
 </head>
 <body>
-  <h1>🌙 Moon Compass</h1>
+  <h1>🌙 Moon Locator</h1>
   <button onclick="init()">Start</button>
   <div id="direction">Waiting for data...</div>
-  <canvas id="moonPhase" width="200" height="200"></canvas>
 
   <script>
-    // 🌙 간단한 Moon Phase 계산 (Conway 알고리즘 기반)
-    function getMoonPhase(date = new Date()) {
-      const lp = 2551443; // 평균 음력 주기 (초 단위)
-      const new_moon = Date.UTC(1970, 0, 7, 20, 35, 0); // 기준점
-      const phase = ((date.getTime() - new_moon) / 1000) % lp;
-      return phase / lp; // 0~1 (0=New, 0.5=Full)
-    }
-
-    // 🌙 달 모양 그리기 (정적)
-    function drawMoonPhase() {
-      const canvas = document.getElementById("moonPhase");
-      const ctx = canvas.getContext("2d");
-      const phase = getMoonPhase();
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "black";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // 달 원 (밝은 면)
-      ctx.beginPath();
-      ctx.arc(100, 100, 80, 0, 2 * Math.PI);
-      ctx.fillStyle = "white";
-      ctx.fill();
-
-      // 어두운 면 마스킹
-      ctx.globalCompositeOperation = "destination-out";
-      ctx.beginPath();
-      ctx.arc(100, 100, 80, Math.PI * (0.5 - phase), Math.PI * (1.5 - phase), true);
-      ctx.fill();
-      ctx.globalCompositeOperation = "source-over";
-    }
+    let moonAzimuth = null;
+    let moonAltitude = null;
 
     // 🌍 사용자의 위치 가져오기
     function init() {
@@ -70,40 +36,58 @@
           const lon = pos.coords.longitude;
 
           document.getElementById("direction").textContent =
-            `Your position: ${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+            `Your position: ${lat.toFixed(2)}, ${lon.toFixed(2)}\nFetching moon position...`;
 
-          // 달 고도/방위각 API (ipgeolocation 예시, 키 필요)
+          // 🌙 달 위치 API (ipgeolocation 예시, 키 필요)
           try {
             const resp = await fetch(
               `https://api.ipgeolocation.io/astronomy?apiKey=YOUR_API_KEY&lat=${lat}&long=${lon}`
             );
             const data = await resp.json();
 
+            moonAzimuth = parseFloat(data.moon_azimuth);
+            moonAltitude = parseFloat(data.moon_altitude);
+
             document.getElementById("direction").textContent =
-              `Moon: Azimuth ${data.moon_azimuth}°, Altitude ${data.moon_altitude}°`;
+              `Moon position → Azimuth: ${moonAzimuth.toFixed(1)}°, Altitude: ${moonAltitude.toFixed(1)}°`;
 
+            setupCompass();
           } catch (e) {
-            document.getElementById("direction").textContent += " (Moon data API error)";
+            document.getElementById("direction").textContent = "Moon data API error.";
           }
-
-          drawMoonPhase();
-          setupCompass();
         });
       } else {
         alert("Geolocation not supported");
       }
     }
 
-    // 🧭 스마트폰 자이로스코프/나침반 데이터
+    // 🧭 스마트폰 나침반 (자이로) 데이터
     function setupCompass() {
       if (window.DeviceOrientationEvent) {
-        window.addEventListener("deviceorientation", e => {
-          if (e.absolute && e.alpha != null) {
-            const heading = 360 - e.alpha; // 북쪽 = 0°
-            document.getElementById("direction").textContent +=
-              ` | Device heading: ${heading.toFixed(0)}°`;
+        window.addEventListener("deviceorientationabsolute", updateHeading, true);
+        window.addEventListener("deviceorientation", updateHeading, true);
+      } else {
+        document.getElementById("direction").textContent += "\n(No compass support)";
+      }
+    }
+
+    function updateHeading(e) {
+      if (e.alpha != null) {
+        const heading = 360 - e.alpha; // 북쪽 기준
+        let text = `Moon position → Azimuth: ${moonAzimuth?.toFixed(1)}°, Altitude: ${moonAltitude?.toFixed(1)}°`;
+        text += `\nYour device heading: ${heading.toFixed(0)}°`;
+
+        if (moonAzimuth != null) {
+          const diff = ((moonAzimuth - heading + 540) % 360) - 180;
+          if (Math.abs(diff) < 15) {
+            text += `\n👉 Pointing at the moon!`;
+          } else if (diff > 0) {
+            text += `\n↗ Turn right ${Math.abs(diff).toFixed(0)}°`;
+          } else {
+            text += `\n↖ Turn left ${Math.abs(diff).toFixed(0)}°`;
           }
-        });
+        }
+        document.getElementById("direction").textContent = text;
       }
     }
   </script>
