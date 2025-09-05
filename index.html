@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>Moon Locator</title>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body {
       font-family: sans-serif;
@@ -24,6 +26,13 @@
       margin-left: auto;
       margin-right: auto;
     }
+    #map {
+      margin-top: 20px;
+      height: 300px;
+      width: 300px;
+      margin-left: auto;
+      margin-right: auto;
+    }
   </style>
 </head>
 <body>
@@ -31,7 +40,10 @@
   <button onclick="init()">Start</button>
   <div id="direction">Waiting for data...</div>
   <canvas id="compass" width="300" height="300"></canvas>
+  <div id="map"></div>
 
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     // ============= 달 계산용 함수들 =============
     function toJulian(date) {
@@ -149,12 +161,34 @@
     // ============= 메인 로직 =============
     let moonData = null;
     let updateTimer = null;
+    let map = null;
+    let marker = null;
 
     function init() {
       if (navigator.geolocation) {
+        // 기존 타이머 정리
+        if (updateTimer) {
+          clearInterval(updateTimer);
+          updateTimer = null;
+        }
+
+        // 새로운 GPS 위치 가져오기
         navigator.geolocation.getCurrentPosition(pos => {
           const lat = pos.coords.latitude;
           const lon = pos.coords.longitude;
+
+          // 지도 초기화 또는 업데이트
+          if (!map) {
+            map = L.map('map').setView([lat, lon], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+            marker = L.marker([lat, lon]).addTo(map)
+              .bindPopup('Your Location').openPopup();
+          } else {
+            map.setView([lat, lon], 13);
+            marker.setLatLng([lat, lon]);
+          }
 
           function update() {
             const now = new Date();
@@ -179,10 +213,14 @@
           }
 
           update();
-          if (updateTimer) clearInterval(updateTimer);
           updateTimer = setInterval(update, 500); // 0.5초마다 업데이트
 
-          setupCompass();
+          // 나침반 설정 (최초 실행 시에만)
+          if (!window.ondeviceorientationabsolute && !window.ondeviceorientation) {
+            setupCompass();
+          }
+        }, () => {
+          alert("Geolocation failed");
         });
       } else {
         alert("Geolocation not supported");
