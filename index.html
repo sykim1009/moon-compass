@@ -85,6 +85,9 @@
         Math.tan(dec) * Math.cos(phi) - Math.sin(phi) * Math.cos(H)
       );
 
+      // 디버깅 로그
+      console.log(`moonPosition: Date=${date.toISOString()}, Lat=${lat}, Lon=${lon}, Alt=${(alt / rad).toFixed(2)}°, Az=${((az / rad + 360) % 360).toFixed(2)}°, Dec=${(dec / rad).toFixed(2)}°, RA=${(ra / rad).toFixed(2)}°`);
+
       return {
         azimuth: (az / rad + 360) % 360,
         altitude: alt / rad,
@@ -98,7 +101,7 @@
       const newMoon = new Date(Date.UTC(2020, 0, 21, 10, 14)); // 2020년 1월 21일 10:14 UTC
       const phase = ((date.getTime() - newMoon.getTime()) / 1000) % lp;
       const phaseFraction = phase / lp;
-      console.log(`Moon Phase: ${phaseFraction.toFixed(4)}`); // 디버깅용
+      console.log(`Moon Phase: ${phaseFraction.toFixed(4)}`);
       return phaseFraction;
     }
 
@@ -115,7 +118,7 @@
 
     function moonRiseSet(date, lat, lon) {
       const rad = Math.PI / 180;
-      const h0 = -0.133 * rad; // 달의 뜨고 지는 시간 계산을 위한 고도 보정
+      const h0 = -0.566 * rad; // 달 반지름(0.25°) + 대기 굴절(0.316°) 보정
       const phi = lat * rad;
       const lw = -lon * rad;
 
@@ -125,10 +128,10 @@
       let riseTime = null;
       let setTime = null;
 
-      // 10분 간격(1/144)으로 더 세밀하게 확인
-      for (let i = 0; i < 144; i++) {
-        const currentTime = fromJulian(toJulian(date) + i / 144);
-        const nextTime = fromJulian(toJulian(date) + (i + 1) / 144);
+      // 1분 간격(1/1440)으로 확인
+      for (let i = 0; i < 1440; i++) {
+        const currentTime = fromJulian(toJulian(date) + i / 1440);
+        const nextTime = fromJulian(toJulian(date) + (i + 1) / 1440);
         
         const mp1 = moonPosition(currentTime, lat, lon);
         const mp2 = moonPosition(nextTime, lat, lon);
@@ -144,19 +147,29 @@
         const alt1 = Math.asin(Math.sin(phi) * Math.sin(mp1.dec) + Math.cos(phi) * Math.cos(mp1.dec) * Math.cos(H1));
         const alt2 = Math.asin(Math.sin(phi) * Math.sin(mp2.dec) + Math.cos(phi) * Math.cos(mp2.dec) * Math.cos(H2));
 
-        // 디버깅 로그
+        // 디버깅 로그 (10분마다 출력)
         if (i % 10 === 0) {
           console.log(`Time: ${currentTime.toISOString()}, Alt1: ${(alt1 / rad).toFixed(2)}°, Alt2: ${(alt2 / rad).toFixed(2)}°, H1: ${(H1 / rad).toFixed(2)}°`);
         }
 
         if (alt1 <= h0 && alt2 > h0) {
           const fraction = (h0 - alt1) / (alt2 - alt1);
-          riseTime = new Date(currentTime.getTime() + fraction * (10 * 60 * 1000)); // 10분 간격
+          riseTime = new Date(currentTime.getTime() + fraction * (60 * 1000)); // 1분 간격
           console.log(`Rise detected at ${riseTime.toISOString()}`);
         } else if (alt1 >= h0 && alt2 < h0) {
           const fraction = (h0 - alt1) / (alt2 - alt1);
-          setTime = new Date(currentTime.getTime() + fraction * (10 * 60 * 1000)); // 10분 간격
+          setTime = new Date(currentTime.getTime() + fraction * (60 * 1000)); // 1분 간격
           console.log(`Set detected at ${setTime.toISOString()}`);
+        }
+      }
+
+      // 극지방 처리: 달이 뜨거나 지지 않는 경우
+      if (!riseTime && !setTime) {
+        const mp = moonPosition(date, lat, lon);
+        if (mp.altitude > 0) {
+          console.log("Moon is always above horizon");
+        } else {
+          console.log("Moon is always below horizon");
         }
       }
 
@@ -197,10 +210,18 @@
 
           function update() {
             const now = new Date();
-            const moon = moonPosition(now, lat, lon);
-            const phase = getMoonPhase(now);
+            const utcNow = new Date(Date.UTC(
+              now.getUTCFullYear(),
+              now.getUTCMonth(),
+              now.getUTCDate(),
+              now.getUTCHours(),
+              now.getUTCMinutes(),
+              now.getUTCSeconds()
+            ));
+            const moon = moonPosition(utcNow, lat, lon);
+            const phase = getMoonPhase(utcNow);
             const emoji = getMoonPhaseEmoji(phase);
-            const times = moonRiseSet(now, lat, lon);
+            const times = moonRiseSet(utcNow, lat, lon);
 
             let text =
               `Your position: ${lat.toFixed(4)}, ${lon.toFixed(4)}\n` +
