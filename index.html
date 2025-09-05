@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <title>Moon Locator</title>
-  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body {
@@ -42,7 +41,6 @@
   <canvas id="compass" width="300" height="300"></canvas>
   <div id="map"></div>
 
-  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     // ============= 달 계산용 함수들 =============
@@ -96,26 +94,28 @@
     }
 
     function getMoonPhase(date) {
-      const lp = 2551443; // 평균 삭망월 (초)
-      const newMoon = new Date(2000, 0, 6, 18, 14);
+      const lp = 2551442.88; // 평균 삭망월 (초, 약 29.530588일)
+      const newMoon = new Date(Date.UTC(2020, 0, 21, 10, 14)); // 2020년 1월 21일 10:14 UTC (정확한 신월)
       const phase = ((date.getTime() - newMoon.getTime()) / 1000) % lp;
-      return phase / lp;
+      const phaseFraction = phase / lp;
+      console.log(`Moon Phase: ${phaseFraction.toFixed(4)}`); // 디버깅용
+      return phaseFraction;
     }
 
     function getMoonPhaseEmoji(phase) {
-      if (phase < 0.1) return "🌑";
-      if (phase < 0.3) return "🌒";
-      if (phase < 0.45) return "🌓";
-      if (phase < 0.55) return "🌔";
-      if (phase < 0.7) return "🌕";
-      if (phase < 0.8) return "🌖";
-      if (phase < 0.9) return "🌗";
-      return "🌘";
+      if (phase < 0.05 || phase >= 0.95) return "🌑"; // 신월
+      if (phase < 0.25) return "🌒"; // 상현달
+      if (phase < 0.45) return "🌓"; // 상현달 (1/4)
+      if (phase < 0.55) return "🌔"; // 상현달 (3/4)
+      if (phase < 0.75) return "🌕"; // 보름달
+      if (phase < 0.85) return "🌖"; // 하현달 (3/4)
+      if (phase < 0.95) return "🌗"; // 하현달 (1/4)
+      return "🌘"; // 하현달
     }
 
     function moonRiseSet(date, lat, lon) {
       const rad = Math.PI / 180;
-      const h0 = -0.133 * rad; // 달의 뜨고 지는 시간 계산을 위한 고도 보정
+      const h0 = -0.133 * rad;
       const phi = lat * rad;
       const lw = -lon * rad;
 
@@ -166,18 +166,15 @@
 
     function init() {
       if (navigator.geolocation) {
-        // 기존 타이머 정리
         if (updateTimer) {
           clearInterval(updateTimer);
           updateTimer = null;
         }
 
-        // 새로운 GPS 위치 가져오기
         navigator.geolocation.getCurrentPosition(pos => {
           const lat = pos.coords.latitude;
           const lon = pos.coords.longitude;
 
-          // 지도 초기화 또는 업데이트
           if (!map) {
             map = L.map('map').setView([lat, lon], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -213,9 +210,8 @@
           }
 
           update();
-          updateTimer = setInterval(update, 500); // 0.5초마다 업데이트
+          updateTimer = setInterval(update, 500);
 
-          // 나침반 설정 (최초 실행 시에만)
           if (!window.ondeviceorientationabsolute && !window.ondeviceorientation) {
             setupCompass();
           }
@@ -248,15 +244,13 @@
     function updateHeading(e) {
       if (!moonData || e.alpha == null) return;
 
-      const heading = 360 - e.alpha; // 북쪽 기준
+      const heading = 360 - e.alpha;
       const canvas = document.getElementById("compass");
       const ctx = canvas.getContext("2d");
       const radius = canvas.width / 2;
 
-      // 캔버스 초기화
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 나침반 원 그리기
       ctx.beginPath();
       ctx.arc(radius, radius, radius - 10, 0, 2 * Math.PI);
       ctx.fillStyle = "#333";
@@ -265,7 +259,6 @@
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // 방위 표시 (N, E, S, W)
       ctx.fillStyle = "#fff";
       ctx.font = "16px sans-serif";
       ctx.textAlign = "center";
@@ -275,7 +268,6 @@
       ctx.fillText("S", radius, canvas.height - 20);
       ctx.fillText("W", 20, radius);
 
-      // 사용자의 방향(heading) 표시 (빨간 화살표)
       ctx.save();
       ctx.translate(radius, radius);
       ctx.rotate(heading * Math.PI / 180);
@@ -288,7 +280,6 @@
       ctx.fill();
       ctx.restore();
 
-      // 달의 방향(azimuth) 표시 (노란 달 아이콘)
       ctx.save();
       ctx.translate(radius, radius);
       ctx.rotate(moonData.azimuth * Math.PI / 180);
@@ -298,11 +289,10 @@
       ctx.restore();
     }
 
-    // requestAnimationFrame을 사용한 부드러운 렌더링
     let lastHeadingUpdate = 0;
     function debouncedUpdateHeading(e) {
       const now = performance.now();
-      if (now - lastHeadingUpdate < 100) return; // 100ms 디바운싱
+      if (now - lastHeadingUpdate < 100) return;
       lastHeadingUpdate = now;
       requestAnimationFrame(() => updateHeading(e));
     }
