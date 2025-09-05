@@ -191,19 +191,17 @@
 
     function setupCompass() {
       if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
-        // iOS 13+ devices
         DeviceOrientationEvent.requestPermission()
           .then(response => {
             if (response === "granted") {
-              window.addEventListener("deviceorientation", updateHeading, true);
+              window.addEventListener("deviceorientation", debouncedUpdateHeading, true);
             } else {
               alert("Device orientation permission denied");
             }
           })
           .catch(() => alert("Device orientation not supported"));
       } else if (window.DeviceOrientationEvent) {
-        // Non-iOS devices or older browsers
-        window.addEventListener("deviceorientationabsolute", updateHeading, true);
+        window.addEventListener("deviceorientationabsolute", debouncedUpdateHeading, true);
       } else {
         alert("Device orientation not supported");
       }
@@ -260,21 +258,6 @@
       ctx.fillStyle = "yellow";
       ctx.fillText("🌙", 0, -radius + 30);
       ctx.restore();
-
-      // 텍스트 업데이트
-      let text = document.getElementById("direction").textContent.split('\n').slice(0, 5).join('\n');
-      text += `\nYour heading: ${heading.toFixed(0)}°`;
-
-      const diff = ((moonData.azimuth - heading + 540) % 360) - 180;
-      if (Math.abs(diff) < 15) {
-        text += `\n👉 Pointing at the moon!`;
-      } else if (diff > 0) {
-        text += `\n↗ Turn right ${Math.abs(diff).toFixed(0)}°`;
-      } else {
-        text += `\n↖ Turn left ${Math.abs(diff).toFixed(0)}°`;
-      }
-
-      document.getElementById("direction").textContent = text;
     }
 
     // requestAnimationFrame을 사용한 부드러운 렌더링
@@ -284,25 +267,6 @@
       if (now - lastHeadingUpdate < 100) return; // 100ms 디바운싱
       lastHeadingUpdate = now;
       requestAnimationFrame(() => updateHeading(e));
-    }
-
-    // 이벤트 리스너 수정
-    function setupCompass() {
-      if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
-        DeviceOrientationEvent.requestPermission()
-          .then(response => {
-            if (response === "granted") {
-              window.addEventListener("deviceorientation", debouncedUpdateHeading, true);
-            } else {
-              alert("Device orientation permission denied");
-            }
-          })
-          .catch(() => alert("Device orientation not supported"));
-      } else if (window.DeviceOrientationEvent) {
-        window.addEventListener("deviceorientationabsolute", debouncedUpdateHeading, true);
-      } else {
-        alert("Device orientation not supported");
-      }
     }
   </script>
 </body>
