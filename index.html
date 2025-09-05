@@ -29,20 +29,13 @@
       
       const now = new Date();
       const moon = moonPosition(now, lat, lon);
+      currentMoonAzimuth = moon.azimuth;
       
       // 달 위상에 따른 이모지 업데이트
       const moonIcon = document.getElementById('moonIcon');
       moonIcon.textContent = getMoonPhaseEmoji(moon.phase);
       
-      const info = document.getElementById('info');
-      info.innerHTML = `
-        <div>입력된 위치</div>
-        <div class="coords">${lat.toFixed(4)}°, ${lon.toFixed(4)}°</div>
-        <div style="margin-top: 15px;">달의 위치</div>
-        <div>방위각: <strong>${moon.azimuth.toFixed(1)}°</strong></div>
-        <div>고도: <strong>${moon.altitude.toFixed(1)}°</strong></div>
-        <div>위상: <strong>${(moon.phase * 100).toFixed(0)}%</strong></div>
-      `;
+      updateLocationDisplay(lat, lon, moon, 0, now);
       
       const status = document.getElementById('status');
       
@@ -52,7 +45,7 @@
         document.getElementById('startBtn').disabled = false;
       } else {
         status.textContent = '나침반을 활성화하는 중...';
-        setupCompass(moon.azimuth);
+        setupCompass();
       }
     }
     
