@@ -1,279 +1,111 @@
-<!doctype html>
-<html lang="ko">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Moon Compass — Demo</title>
+  <meta charset="UTF-8">
+  <title>Moon Compass</title>
   <style>
-    :root{--bg:#0b1220;--card:#0f1724;--accent:#7dd3fc;--muted:#9ca3af}
-    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
-    body{background:linear-gradient(180deg,#061025 0%, #061023 60%);color:#e6eef8;display:flex;align-items:center;justify-content:center;padding:16px}
-    .app{max-width:720px;width:100%;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:12px;padding:16px;box-shadow:0 6px 30px rgba(2,6,23,0.6)}
-    header{display:flex;gap:12px;align-items:center}
-    h1{font-size:18px;margin:0}
-    .controls{margin-left:auto;display:flex;gap:8px}
-    button{background:var(--accent);color:#032;border:none;padding:8px 12px;border-radius:8px;font-weight:600}
-    .layout{display:flex;gap:12px;margin-top:12px;align-items:flex-start}
-    .panel{flex:1;background:rgba(255,255,255,0.02);border-radius:10px;padding:12px}
-    .compass{height:320px;display:flex;align-items:center;justify-content:center;position:relative}
-    .dial{width:260px;height:260px;border-radius:50%;background:radial-gradient(circle at 40% 30%, rgba(255,255,255,0.02), rgba(0,0,0,0.25));border:2px solid rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;position:relative}
-    .north{position:absolute;top:8px;left:50%;transform:translateX(-50%);font-weight:700}
-    .arrow{width:6px;height:120px;background:linear-gradient(#fff,#dbeafe);position:absolute;top:50%;left:50%;transform-origin:50% 82%;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,0.6)}
-    .arrow::after{content:'';position:absolute;left:50%;top:-18px;transform:translateX(-50%);width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;border-bottom:18px solid #fff;border-radius:2px}
-    .info{display:flex;flex-direction:column;gap:6px}
-    .row{display:flex;gap:8px;align-items:center}
-    .big{font-size:18px;font-weight:700}
-    canvas{background:transparent;border-radius:50%}
-    .muted{color:var(--muted);font-size:13px}
-    .hint{font-size:13px;color:var(--muted);margin-top:8px}
-    .warn{color:#fca5a5;font-weight:600}
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      background: black;
+      color: white;
+      margin: 0;
+      padding: 1em;
+    }
+    #moonPhase {
+      margin-top: 20px;
+      background: black;
+      border-radius: 50%;
+    }
+    #direction {
+      margin-top: 20px;
+      font-size: 1.2em;
+    }
   </style>
 </head>
 <body>
-  <div class="app" role="application">
-    <header>
-      <h1>Moon Compass — 스마트폰용 데모</h1>
-      <div class="controls">
-        <button id="startBtn">Start (권한 요청)</button>
-        <button id="locBtn">재요청: 위치</button>
-      </div>
-    </header>
-
-    <div class="layout">
-      <section class="panel">
-        <div class="compass">
-          <div class="dial">
-            <div class="north">N</div>
-            <div id="arrow" class="arrow" style="transform:rotate(0deg)"></div>
-          </div>
-        </div>
-        <div class="hint">화면 상단(폰의 '머리' 방향)이 현재 기기의 바라보는 방향입니다. 화살표가 가리키는 쪽으로 폰을 돌리면 달을 찾을 수 있습니다.</div>
-      </section>
-
-      <aside class="panel info">
-        <div class="row"><div class="big">방위각:</div><div id="azText" class="big">--°</div></div>
-        <div class="row"><div class="big">고도:</div><div id="altText" class="big">--°</div></div>
-        <div class="row"><div class="big">달 모양(조도):</div><div id="phaseText">--</div></div>
-
-        <canvas id="moonCanvas" width="160" height="160" aria-label="moon phase illustration"></canvas>
-
-        <div class="muted">상태: <span id="status">대기중</span></div>
-        <div class="muted">참고: iOS에서는 자이로/나침반 허용 팝업이 필요합니다.</div>
-      </aside>
-    </div>
-  </div>
-
-  <!-- SunCalc (CDN) -->
-  <script src="https://unpkg.com/suncalc@1.9.0/suncalc.js"></script>
+  <h1>🌙 Moon Compass</h1>
+  <button onclick="init()">Start</button>
+  <div id="direction">Waiting for data...</div>
+  <canvas id="moonPhase" width="200" height="200"></canvas>
 
   <script>
-  // ==========================
-  // Moon Compass — single file
-  // - 위치: Geolocation API
-  // - 달 위치/조도: SunCalc.getMoonPosition / getMoonIllumination
-  // - 방향: DeviceOrientationEvent (webkitCompassHeading on iOS fallback)
-  // ==========================
-
-  const startBtn = document.getElementById('startBtn');
-  const locBtn = document.getElementById('locBtn');
-  const azText = document.getElementById('azText');
-  const altText = document.getElementById('altText');
-  const phaseText = document.getElementById('phaseText');
-  const status = document.getElementById('status');
-  const arrow = document.getElementById('arrow');
-  const moonCanvas = document.getElementById('moonCanvas');
-  const ctx = moonCanvas.getContext('2d');
-
-  let lat = null, lon = null;
-  let moonAz = 0, moonAlt = 0; // degrees
-  let heading = null; // degrees from true north (approx)
-  let watchId = null;
-
-  // smoothing helpers (shortest angular interpolation)
-  function shortestAngleDiff(a, b){
-    let d = ((b - a + 540) % 360) - 180;
-    return d;
-  }
-  function angleLerp(a, b, alpha){
-    if (a == null) return b;
-    const d = shortestAngleDiff(a,b);
-    return (a + d * alpha + 360) % 360;
-  }
-
-  // 폰의 heading(자북 기준) 계산 - 다양한 브라우저 대응
-  function handleOrientation(e){
-    let h = null;
-    // iOS (Safari) provides webkitCompassHeading directly in degrees
-    if (e.webkitCompassHeading !== undefined) {
-      h = e.webkitCompassHeading; // 0..360, north=0
-    } else if (e.absolute === true && e.alpha !== null) {
-      // Android Chrome (when absolute==true) - alpha is rotation around Z; convert
-      // many examples use: heading = 360 - alpha, then compensate screen orientation
-      h = 360 - e.alpha;
-      const orient = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
-      h = (h + orient) % 360;
-    } else if (e.alpha !== null) {
-      // fallback (may be relative): try the same conversion but warn user
-      h = 360 - e.alpha;
-      const orient = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
-      h = (h + orient) % 360;
+    // 🌙 간단한 Moon Phase 계산 (Conway 알고리즘 기반)
+    function getMoonPhase(date = new Date()) {
+      const lp = 2551443; // 평균 음력 주기 (초 단위)
+      const new_moon = Date.UTC(1970, 0, 7, 20, 35, 0); // 기준점
+      const phase = ((date.getTime() - new_moon) / 1000) % lp;
+      return phase / lp; // 0~1 (0=New, 0.5=Full)
     }
 
-    if (h !== null && !isNaN(h)){
-      // smooth the heading to avoid jitter
-      heading = angleLerp(heading, h, 0.25);
-      updateArrow();
+    // 🌙 달 모양 그리기 (정적)
+    function drawMoonPhase() {
+      const canvas = document.getElementById("moonPhase");
+      const ctx = canvas.getContext("2d");
+      const phase = getMoonPhase();
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 달 원 (밝은 면)
+      ctx.beginPath();
+      ctx.arc(100, 100, 80, 0, 2 * Math.PI);
+      ctx.fillStyle = "white";
+      ctx.fill();
+
+      // 어두운 면 마스킹
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.beginPath();
+      ctx.arc(100, 100, 80, Math.PI * (0.5 - phase), Math.PI * (1.5 - phase), true);
+      ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
     }
-  }
 
-  // 달 위치 계산 (SunCalc 사용)
-  function updateMoon(){
-    if (lat == null || lon == null) return;
-    const now = new Date();
-    const mp = SunCalc.getMoonPosition(now, lat, lon);
-    const mi = SunCalc.getMoonIllumination(now);
+    // 🌍 사용자의 위치 가져오기
+    function init() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async pos => {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
 
-    // SunCalc의 azimuth: 라디안, "0 = 남쪽" 기준. (문서 참고) ➜ 진북 기준으로 바꾸려면 +180deg
-    // (az radians -> degrees) + 180, 아래 변환 참고
-    const azDeg = (mp.azimuth * 180/Math.PI + 180) % 360;
-    const altDeg = mp.altitude * 180/Math.PI;
+          document.getElementById("direction").textContent =
+            `Your position: ${lat.toFixed(2)}, ${lon.toFixed(2)}`;
 
-    moonAz = azDeg;
-    moonAlt = altDeg;
+          // 달 고도/방위각 API (ipgeolocation 예시, 키 필요)
+          try {
+            const resp = await fetch(
+              `https://api.ipgeolocation.io/astronomy?apiKey=YOUR_API_KEY&lat=${lat}&long=${lon}`
+            );
+            const data = await resp.json();
 
-    azText.textContent = azDeg.toFixed(1) + '° (' + degToCompass(azDeg) + ')';
-    altText.textContent = altDeg.toFixed(1) + '°';
+            document.getElementById("direction").textContent =
+              `Moon: Azimuth ${data.moon_azimuth}°, Altitude ${data.moon_altitude}°`;
 
-    const frac = mi.fraction; // 0..1
-    const ph = mi.phase; // 0..1
-    phaseText.textContent = `${(frac*100).toFixed(1)}% — phase ${ph.toFixed(2)}`;
+          } catch (e) {
+            document.getElementById("direction").textContent += " (Moon data API error)";
+          }
 
-    drawMoon(frac, ph, mi.angle, mp.parallacticAngle || 0);
-
-    updateArrow();
-  }
-
-  function degToCompass(bearing){
-    const labels = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-    const idx = Math.floor(((bearing + 11.25) % 360) / 22.5);
-    return labels[idx];
-  }
-
-  // 화살표 회전: 폰 머리(상단)가 향하는 heading과 달의 방위각(진북 기준)을 사용
-  // relative = (moonAz - heading + 360) % 360  → CSS 회전 각도
-  function updateArrow(){
-    if (heading == null || moonAz == null) return;
-    const rel = (moonAz - heading + 360) % 360;
-    // CSS rotate rotates clockwise for positive deg, arrow originally pointing up
-    arrow.style.transform = `rotate(${rel}deg)`;
-
-    // small status
-    const dir = rel <= 10 || rel >= 350 ? '앞쪽' : (rel < 180 ? '오른쪽' : '왼쪽');
-    status.textContent = `기기 heading: ${heading.toFixed(1)}°, 달 상대각: ${rel.toFixed(1)}° (${dir})`;
-  }
-
-  // 달 모양 그리기 (간단한 겹쳐진 원을 사용한 방법)
-  function drawMoon(fraction, phase, angleRad=0, parallactic=0){
-    const dpr = window.devicePixelRatio || 1;
-    const W = moonCanvas.width; const H = moonCanvas.height;
-    moonCanvas.width = W * dpr; moonCanvas.height = H * dpr;
-    moonCanvas.style.width = W + 'px'; moonCanvas.style.height = H + 'px';
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    ctx.clearRect(0,0,W,H);
-
-    const cx = W/2, cy = H/2, r = Math.min(W,H)/2 - 6;
-
-    // draw dark disk
-    ctx.fillStyle = '#081227';
-    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
-
-    // Use fraction to compute offset for the illuminated circle
-    // k = 2*fraction - 1  (range -1..1). positive -> more lit
-    const k = 2 * fraction - 1;
-    // decide waxing/waning from phase (<0.5 waxing: lit on right)
-    const waxing = phase < 0.5;
-    // offset magnitude
-    let offset = k * r;
-    // invert offset for waning (so lit side flips)
-    if (!waxing) offset = -offset;
-
-    // rotate canvas so that lit limb tilt matches 'angle' (approx)
-    ctx.save();
-    ctx.translate(cx,cy);
-    ctx.rotate(-angleRad + (parallactic || 0)); // small correction
-    ctx.translate(-cx,-cy);
-
-    // draw illuminated circle
-    ctx.fillStyle = '#fbfbf7';
-    ctx.beginPath(); ctx.arc(cx + offset, cy, r, 0, Math.PI*2); ctx.fill();
-
-    // clip to original moon disk
-    ctx.globalCompositeOperation = 'destination-in';
-    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
-
-    ctx.restore();
-    ctx.globalCompositeOperation = 'source-over';
-
-    // tiny edge
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke();
-  }
-
-  // 위치 요청 (watchPosition으로 지속 업데이트)
-  function startGeolocation(){
-    if (!('geolocation' in navigator)){
-      alert('Geolocation API를 지원하지 않는 브라우저입니다.');
-      return;
-    }
-    watchId = navigator.geolocation.watchPosition(pos => {
-      lat = pos.coords.latitude; lon = pos.coords.longitude;
-      updateMoon();
-    }, err => {
-      console.warn('geolocation error',err);
-      status.textContent = '위치 허용 필요';
-    }, {enableHighAccuracy:true, maximumAge:5000, timeout:10000});
-  }
-
-  // iOS requires user gesture to call requestPermission
-  async function enableOrientation(){
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
-      try{
-        const perm = await DeviceOrientationEvent.requestPermission();
-        if (perm === 'granted'){
-          window.addEventListener('deviceorientation', handleOrientation, true);
-        } else {
-          status.textContent = '자이로/나침반 권한 필요';
-        }
-      } catch(e){
-        console.warn('requestPermission failed', e);
-        status.textContent = '자이로 권한 요청 실패';
+          drawMoonPhase();
+          setupCompass();
+        });
+      } else {
+        alert("Geolocation not supported");
       }
-    } else {
-      // 대부분의 Android/Chrome, 데스크탑에서 이 방식
-      window.addEventListener('deviceorientation', handleOrientation, true);
     }
-  }
 
-  startBtn.addEventListener('click', async ()=>{
-    startBtn.disabled = true;
-    status.textContent = '권한 요청 중...';
-    startGeolocation();
-    await enableOrientation();
-    // run an immediate update
-    updateMoon();
-    status.textContent = '실행 중';
-  });
-
-  locBtn.addEventListener('click', ()=>{
-    if (watchId) navigator.geolocation.clearWatch(watchId);
-    startGeolocation();
-  });
-
-  // 자동 갱신 (달의 위치는 초단위로 느리게 변하므로 1초마다 갱신)
-  setInterval(updateMoon, 1000);
-
-  // 초기 그리기
-  drawMoon(0.5, 0.5, 0, 0);
+    // 🧭 스마트폰 자이로스코프/나침반 데이터
+    function setupCompass() {
+      if (window.DeviceOrientationEvent) {
+        window.addEventListener("deviceorientation", e => {
+          if (e.absolute && e.alpha != null) {
+            const heading = 360 - e.alpha; // 북쪽 = 0°
+            document.getElementById("direction").textContent +=
+              ` | Device heading: ${heading.toFixed(0)}°`;
+          }
+        });
+      }
+    }
   </script>
 </body>
 </html>
