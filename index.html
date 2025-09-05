@@ -63,15 +63,31 @@
       const rad = Math.PI / 180;
       const day = toJulian(date) - 2451545.0;
 
+      // 더 정확한 달의 위치 계산
       const L = (218.316 + 13.176396 * day) * rad;
       const M = (134.963 + 13.064993 * day) * rad;
       const F = (93.272 + 13.229350 * day) * rad;
+      const D = (297.850 + 12.190749 * day) * rad;
+      const MS = (357.529 + 0.985600 * day) * rad;
 
-      const lonEcl = L + 6.289 * rad * Math.sin(M);
-      const latEcl = 5.128 * rad * Math.sin(F);
+      // 달의 경도 (더 많은 항 추가)
+      const lonEcl = L + 
+        6.289 * Math.sin(M) * rad +
+        1.274 * Math.sin(2*D - M) * rad +
+        0.658 * Math.sin(2*D) * rad -
+        0.186 * Math.sin(MS) * rad -
+        0.059 * Math.sin(2*M - 2*D) * rad -
+        0.057 * Math.sin(M - 2*D + MS) * rad;
+
+      // 달의 위도
+      const latEcl = 5.128 * Math.sin(F) * rad +
+        0.281 * Math.sin(M + F) * rad +
+        0.278 * Math.sin(M - F) * rad +
+        0.173 * Math.sin(2*D - F) * rad;
 
       const e = (23.439 - 0.0000004 * day) * rad;
 
+      // 적경과 적위 계산
       const ra = Math.atan2(
         Math.sin(lonEcl) * Math.cos(e) - Math.tan(latEcl) * Math.sin(e),
         Math.cos(lonEcl)
@@ -80,20 +96,19 @@
         Math.sin(latEcl) * Math.cos(e) + Math.cos(latEcl) * Math.sin(e) * Math.sin(lonEcl)
       );
 
+      // 지방 항성시 계산
       const GMST = (18.697374558 + 24.06570982441908 * day) % 24;
       const LST = (GMST * 15 + lon) * rad;
-
       const H = LST - ra;
+
       const phi = lat * rad;
 
+      // 고도와 방위각 계산
       const alt = Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H));
       const az = Math.atan2(
         -Math.sin(H),
         Math.tan(dec) * Math.cos(phi) - Math.sin(phi) * Math.cos(H)
       );
-
-      // 디버깅 로그
-      console.log(`moonPosition: Date=${date.toISOString()}, Lat=${lat}, Lon=${lon}, Alt=${(alt / rad).toFixed(2)}°, Az=${((az / rad + 360) % 360).toFixed(2)}°, Dec=${(dec / rad).toFixed(2)}°, RA=${(ra / rad).toFixed(2)}°`);
 
       return {
         azimuth: (az / rad + 360) % 360,
@@ -104,11 +119,10 @@
     }
 
     function getMoonPhase(date) {
-      const lp = 2551442.88; // 평균 삭망월 (초, 약 29.530588일)
-      const newMoon = new Date(Date.UTC(2020, 0, 21, 10, 14)); // 2020년 1월 21일 10:14 UTC
+      const lp = 2551442.88; // 평균 삭망월 (초)
+      const newMoon = new Date(Date.UTC(2020, 0, 24, 21, 42)); // 더 정확한 기준 신월
       const phase = ((date.getTime() - newMoon.getTime()) / 1000) % lp;
       const phaseFraction = phase / lp;
-      console.log(`Moon Phase: ${phaseFraction.toFixed(4)}`);
       return phaseFraction;
     }
 
@@ -125,65 +139,61 @@
 
     function moonRiseSet(date, lat, lon) {
       const rad = Math.PI / 180;
-      const h0 = -0.833 * rad; // 달 반지름(0.25°) + 대기 굴절(0.34°) + 지평선 보정
-      const phi = lat * rad;
-      const lw = -lon * rad;
-
-      const d = toJulian(date) - 2451545.0;
-
-      const times = {};
+      const h0 = -0.833 * rad; // 지평선 기준
+      
+      // 당일 00:00부터 다음날 00:00까지 계산
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      
       let riseTime = null;
       let setTime = null;
+      let prevAlt = null;
 
-      // 1분 간격(1/1440)으로 확인
-      for (let i = 0; i < 1440; i++) {
-        const currentTime = fromJulian(toJulian(date) + i / 1440);
-        const nextTime = fromJulian(toJulian(date) + (i + 1) / 1440);
+      // 5분 간격으로 체크 (더 정확하고 빠름)
+      for (let i = 0; i <= 24 * 12; i++) { // 24시간 * 12 (5분 간격)
+        const checkTime = new Date(startOfDay.getTime() + i * 5 * 60 * 1000);
+        const moon = moonPosition(checkTime, lat, lon);
         
-        const mp1 = moonPosition(currentTime, lat, lon);
-        const mp2 = moonPosition(nextTime, lat, lon);
-
-        const GMST1 = (18.697374558 + 24.06570982441908 * (toJulian(currentTime) - 2451545.0)) % 24;
-        const LST1 = (GMST1 * 15 + lon) * rad;
-        const H1 = LST1 - mp1.ra;
-
-        const GMST2 = (18.697374558 + 24.06570982441908 * (toJulian(nextTime) - 2451545.0)) % 24;
-        const LST2 = (GMST2 * 15 + lon) * rad;
-        const H2 = LST2 - mp2.ra;
-
-        const alt1 = Math.asin(Math.sin(phi) * Math.sin(mp1.dec) + Math.cos(phi) * Math.cos(mp1.dec) * Math.cos(H1));
-        const alt2 = Math.asin(Math.sin(phi) * Math.sin(mp2.dec) + Math.cos(phi) * Math.cos(mp2.dec) * Math.cos(H2));
-
-        // 디버깅 로그 (10분마다 출력)
-        if (i % 10 === 0) {
-          console.log(`moonRiseSet: Time=${currentTime.toISOString()}, Alt1=${(alt1 / rad).toFixed(2)}°, Alt2=${(alt2 / rad).toFixed(2)}°, H1=${(H1 / rad).toFixed(2)}°, h0=${(h0 / rad).toFixed(3)}°`);
+        // 지평선을 기준으로 한 고도 계산
+        const altRad = moon.altitude * rad;
+        
+        if (prevAlt !== null) {
+          // 떠오름 감지 (이전: 지평선 아래, 현재: 지평선 위)
+          if (prevAlt <= h0 && altRad > h0 && !riseTime) {
+            // 더 정확한 시간을 위해 선형 보간
+            const timeDiff = 5 * 60 * 1000; // 5분
+            const altDiff = altRad - prevAlt;
+            const ratio = (h0 - prevAlt) / altDiff;
+            riseTime = new Date(checkTime.getTime() - timeDiff + ratio * timeDiff);
+          }
+          
+          // 지는 것 감지 (이전: 지평선 위, 현재: 지평선 아래)
+          if (prevAlt >= h0 && altRad < h0 && !setTime) {
+            // 더 정확한 시간을 위해 선형 보간
+            const timeDiff = 5 * 60 * 1000; // 5분
+            const altDiff = altRad - prevAlt;
+            const ratio = (h0 - prevAlt) / altDiff;
+            setTime = new Date(checkTime.getTime() - timeDiff + ratio * timeDiff);
+          }
         }
-
-        if (alt1 <= h0 && alt2 > h0) {
-          const fraction = (h0 - alt1) / (alt2 - alt1);
-          riseTime = new Date(currentTime.getTime() + fraction * (60 * 1000)); // 1분 간격
-          console.log(`Rise detected at ${riseTime.toISOString()} (KST: ${riseTime.toLocaleString('en-US', { timeZone: 'Asia/Seoul' })})`);
-        } else if (alt1 >= h0 && alt2 < h0) {
-          const fraction = (h0 - alt1) / (alt2 - alt1);
-          setTime = new Date(currentTime.getTime() + fraction * (60 * 1000)); // 1분 간격
-          console.log(`Set detected at ${setTime.toISOString()} (KST: ${setTime.toLocaleString('en-US', { timeZone: 'Asia/Seoul' })})`);
-        }
+        
+        prevAlt = altRad;
       }
 
-      // 극지방 처리
+      const times = {};
+      
+      // 극지방이나 특수한 경우 처리
       if (!riseTime && !setTime) {
-        const mp = moonPosition(date, lat, lon);
-        if (mp.altitude > 0) {
-          console.log("Moon is always above horizon");
-          times.status = "Moon is always above horizon";
+        const moon = moonPosition(date, lat, lon);
+        if (moon.altitude > 0) {
+          times.status = "Always above horizon";
         } else {
-          console.log("Moon is always below horizon");
-          times.status = "Moon is always below horizon";
+          times.status = "Always below horizon";
         }
+      } else {
+        if (riseTime) times.rise = riseTime;
+        if (setTime) times.set = setTime;
       }
-
-      if (riseTime) times.rise = riseTime;
-      if (setTime) times.set = setTime;
 
       return times;
     }
@@ -219,29 +229,25 @@
 
           function update() {
             const now = new Date();
-            const utcNow = new Date(Date.UTC(
-              now.getUTCFullYear(),
-              now.getUTCMonth(),
-              now.getUTCDate(),
-              now.getUTCHours(),
-              now.getUTCMinutes(),
-              now.getUTCSeconds()
-            ));
-            const moon = moonPosition(utcNow, lat, lon);
-            const phase = getMoonPhase(utcNow);
+            const moon = moonPosition(now, lat, lon);
+            const phase = getMoonPhase(now);
             const emoji = getMoonPhaseEmoji(phase);
-            const times = moonRiseSet(utcNow, lat, lon);
+            const times = moonRiseSet(now, lat, lon);
 
             let text =
               `Your position: ${lat.toFixed(4)}, ${lon.toFixed(4)}\n` +
-              `Moon → ${emoji} (Phase: ${phase.toFixed(2)})\n` +
+              `Moon → ${emoji} (Phase: ${(phase * 100).toFixed(1)}%)\n` +
               `Azimuth: ${moon.azimuth.toFixed(1)}°, Altitude: ${moon.altitude.toFixed(1)}°\n`;
 
-            if (times.rise && times.set) {
-              text += `Rise: ${times.rise.toLocaleTimeString('en-US', { timeZone: 'Asia/Seoul' })}\n` +
-                      `Set: ${times.set.toLocaleTimeString('en-US', { timeZone: 'Asia/Seoul' })}`;
-            } else {
-              text += `Rise/Set: ${times.status || 'N/A'}`;
+            if (times.rise || times.set) {
+              if (times.rise) {
+                text += `Rise: ${times.rise.toLocaleTimeString()}\n`;
+              }
+              if (times.set) {
+                text += `Set: ${times.set.toLocaleTimeString()}`;
+              }
+            } else if (times.status) {
+              text += `Status: ${times.status}`;
             }
 
             document.getElementById("direction").textContent = text;
@@ -252,13 +258,12 @@
           }
 
           update();
-          updateTimer = setInterval(update, 500);
+          updateTimer = setInterval(update, 30000); // 30초마다 업데이트
 
-          if (!window.ondeviceorientationabsolute && !window.ondeviceorientation) {
-            setupCompass();
-          }
-        }, () => {
-          alert("Geolocation failed");
+          setupCompass();
+        }, (error) => {
+          console.error("Geolocation error:", error);
+          alert("Geolocation failed: " + error.message);
         });
       } else {
         alert("Geolocation not supported");
@@ -279,20 +284,21 @@
       } else if (window.DeviceOrientationEvent) {
         window.addEventListener("deviceorientationabsolute", debouncedUpdateHeading, true);
       } else {
-        alert("Device orientation not supported");
+        // 나침반이 지원되지 않는 경우에도 기본 표시
+        updateCompassStatic();
       }
     }
 
-    function updateHeading(e) {
-      if (!moonData || e.alpha == null) return;
-
-      const heading = 360 - e.alpha;
+    function updateCompassStatic() {
+      if (!moonData) return;
+      
       const canvas = document.getElementById("compass");
       const ctx = canvas.getContext("2d");
       const radius = canvas.width / 2;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // 나침반 배경
       ctx.beginPath();
       ctx.arc(radius, radius, radius - 10, 0, 2 * Math.PI);
       ctx.fillStyle = "#333";
@@ -301,6 +307,7 @@
       ctx.lineWidth = 2;
       ctx.stroke();
 
+      // 방향 표시
       ctx.fillStyle = "#fff";
       ctx.font = "16px sans-serif";
       ctx.textAlign = "center";
@@ -310,6 +317,49 @@
       ctx.fillText("S", radius, canvas.height - 20);
       ctx.fillText("W", 20, radius);
 
+      // 달 위치 표시
+      ctx.save();
+      ctx.translate(radius, radius);
+      ctx.rotate((moonData.azimuth - 90) * Math.PI / 180); // -90도로 보정 (북쪽이 위)
+      ctx.font = "24px sans-serif";
+      ctx.fillStyle = "yellow";
+      ctx.fillText("🌙", 0, -radius + 30);
+      ctx.restore();
+    }
+
+    function updateHeading(e) {
+      if (!moonData || e.alpha == null) {
+        updateCompassStatic();
+        return;
+      }
+
+      const heading = 360 - e.alpha;
+      const canvas = document.getElementById("compass");
+      const ctx = canvas.getContext("2d");
+      const radius = canvas.width / 2;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 나침반 배경
+      ctx.beginPath();
+      ctx.arc(radius, radius, radius - 10, 0, 2 * Math.PI);
+      ctx.fillStyle = "#333";
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 방향 표시
+      ctx.fillStyle = "#fff";
+      ctx.font = "16px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("N", radius, 20);
+      ctx.fillText("E", canvas.width - 20, radius);
+      ctx.fillText("S", radius, canvas.height - 20);
+      ctx.fillText("W", 20, radius);
+
+      // 현재 방향 (빨간 화살표)
       ctx.save();
       ctx.translate(radius, radius);
       ctx.rotate(heading * Math.PI / 180);
@@ -322,6 +372,7 @@
       ctx.fill();
       ctx.restore();
 
+      // 달 위치
       ctx.save();
       ctx.translate(radius, radius);
       ctx.rotate(moonData.azimuth * Math.PI / 180);
@@ -350,27 +401,32 @@
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // 고도(-90°~90°) 표시
+      // 고도 눈금
       ctx.fillStyle = "#fff";
       ctx.font = "12px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("90°", centerX, 20);
-      ctx.fillText("0°", centerX, centerY);
-      ctx.fillText("-90°", centerX, height - 20);
+      ctx.fillText("90°", 10, 20);
+      ctx.fillText("0°", 10, centerY);
+      ctx.fillText("-90°", 10, height - 20);
 
       // 달의 고도 표시
-      const maxAltitude = 90; // 고도 범위: -90°~90°
-      const y = centerY - (altitude / maxAltitude) * (centerY - 20); // 고도를 캔버스 Y 좌표로 매핑
+      const maxAltitude = 90;
+      const y = centerY - (altitude / maxAltitude) * (centerY - 20);
+      
+      // 달 아이콘
       ctx.beginPath();
       ctx.arc(centerX, y, 10, 0, 2 * Math.PI);
-      ctx.fillStyle = "yellow";
+      ctx.fillStyle = altitude >= 0 ? "yellow" : "#666";
       ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.stroke();
 
-      // 방위각 표시 (텍스트로 추가)
+      // 방위각과 고도 표시
       ctx.fillStyle = "#fff";
       ctx.font = "14px sans-serif";
-      ctx.fillText(`Azimuth: ${azimuth.toFixed(1)}°`, centerX, height - 10);
+      ctx.textAlign = "center";
+      ctx.fillText(`Az: ${azimuth.toFixed(1)}° Alt: ${altitude.toFixed(1)}°`, centerX, height - 5);
     }
 
     let lastHeadingUpdate = 0;
