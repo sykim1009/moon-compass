@@ -19,7 +19,7 @@
       line-height: 1.6;
       white-space: pre-line;
     }
-    #compass, #altitudeDiagram {
+    #compass, #altitudeDiagram, #azimuthDiagram {
       margin-top: 20px;
       display: block;
       margin-left: auto;
@@ -33,7 +33,7 @@
       margin-right: auto;
     }
     @media (max-width: 600px) {
-      #compass, #altitudeDiagram, #map {
+      #compass, #altitudeDiagram, #azimuthDiagram, #map {
         width: 90%;
         height: 250px;
       }
@@ -46,6 +46,7 @@
   <div id="direction">Waiting for data...</div>
   <canvas id="compass" width="300" height="300"></canvas>
   <div id="map"></div>
+  <canvas id="azimuthDiagram" width="400" height="300"></canvas>
   <canvas id="altitudeDiagram" width="300" height="150"></canvas>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -254,6 +255,7 @@
             moonData = moon;
 
             // 다이어그램 업데이트
+            updateAzimuthDiagram(moon.azimuth, moon.altitude);
             updateAltitudeDiagram(moon.azimuth, moon.altitude);
           }
 
@@ -380,6 +382,109 @@
       ctx.fillStyle = "yellow";
       ctx.fillText("🌙", 0, -radius + 30);
       ctx.restore();
+    }
+
+    function updateAzimuthDiagram(azimuth, altitude) {
+      const canvas = document.getElementById("azimuthDiagram");
+      const ctx = canvas.getContext("2d");
+      const width = canvas.width;
+      const height = canvas.height;
+      const centerX = width / 2;
+      const centerY = height * 0.8; // 아래쪽으로 이동
+      const radius = Math.min(width, height) * 0.35;
+
+      // 캔버스 초기화
+      ctx.clearRect(0, 0, width, height);
+
+      // 배경 원 (지평선)
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+      ctx.strokeStyle = "#666";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 방향 표시 (N, E, S, W)
+      ctx.fillStyle = "#fff";
+      ctx.font = "16px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      
+      // N (0°)
+      ctx.fillText("N", centerX, centerY - radius - 20);
+      ctx.fillText("0°", centerX, centerY - radius - 35);
+      
+      // E (90°)
+      ctx.fillText("E", centerX + radius + 20, centerY);
+      ctx.fillText("90°", centerX + radius + 35, centerY);
+      
+      // S (180°)
+      ctx.fillText("S", centerX, centerY + radius + 20);
+      ctx.fillText("180°", centerX, centerY + radius + 35);
+      
+      // W (270°)
+      ctx.fillText("W", centerX - radius - 20, centerY);
+      ctx.fillText("270°", centerX - radius - 35, centerY);
+
+      // 고도 동심원들 (30°, 60°, 90°)
+      ctx.strokeStyle = "#444";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 5]);
+      
+      for (let alt = 30; alt <= 90; alt += 30) {
+        const r = radius * Math.cos(alt * Math.PI / 180);
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, r, 0, 2 * Math.PI);
+        ctx.stroke();
+        
+        // 고도 레이블
+        ctx.fillStyle = "#aaa";
+        ctx.font = "12px sans-serif";
+        ctx.fillText(`${alt}°`, centerX + r + 5, centerY - 5);
+      }
+      
+      ctx.setLineDash([]);
+
+      // 달의 위치 계산
+      const azRad = (azimuth - 90) * Math.PI / 180; // -90도로 보정 (북쪽이 위)
+      const altRad = altitude * Math.PI / 180;
+      
+      // 3D에서 2D로 투영 (stereographic projection)
+      const projectionRadius = radius * Math.cos(altRad);
+      const moonX = centerX + projectionRadius * Math.cos(azRad);
+      const moonY = centerY + projectionRadius * Math.sin(azRad);
+      
+      // 달 표시
+      ctx.fillStyle = altitude >= 0 ? "yellow" : "#666";
+      ctx.beginPath();
+      ctx.arc(moonX, moonY, 12, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // 달 이모지
+      ctx.font = "16px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("🌙", moonX, moonY);
+      
+      // 중심에서 달까지 선
+      if (altitude >= 0) {
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(moonX, moonY);
+        ctx.strokeStyle = "rgba(255, 255, 0, 0.5)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      
+      // 정보 표시
+      ctx.fillStyle = "#fff";
+      ctx.font = "14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`Azimuth: ${azimuth.toFixed(1)}°`, centerX, 20);
+      ctx.fillText(`Altitude: ${altitude.toFixed(1)}°`, centerX, 40);
+      ctx.fillText("3D Azimuth-Altitude View", centerX, height - 10);
     }
 
     function updateAltitudeDiagram(azimuth, altitude) {
